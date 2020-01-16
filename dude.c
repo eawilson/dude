@@ -28,14 +28,14 @@ typedef struct readstruct {
     unsigned short nonoverlapping_len; // Only meaningful for R2
     } Read;
 
-    
-    
+
+
 typedef struct readpairstruct {
     Read read[2];
     unsigned short fragment_size;
     unsigned short copy_number;
     int family;
-    int prevfamily;
+    int prevfamily; // Used as temp starage during mergematrix family creation
     } ReadPair;
 
     
@@ -66,19 +66,22 @@ static int compare_by_short_sequence(const void *first, const void *second, cons
 static int are_they_duplicates(ReadPair *readpair1, ReadPair *readpair2, int allowed);
 static PairedFastq read_fastqs(char *read1, char *read2);
 static void debug_print_read(ReadPair *readpair);
-static void debug_print_fastq(PairedFastq fq);
+void debug_print_fastq(PairedFastq fq);
 static void brute_assign_families(ReadPair *bin_start, ReadPair *bin_end, int *current_family, int allowed);
 static int remove_exact_duplicates(PairedFastq *fq);
 static int remove_n_only_reads(PairedFastq *fq);
 static int size_and_remove_umis(PairedFastq *fq, int allowed, int thruplex);
 static int assign_families(PairedFastq *fq, int allowed);
+static void assign_umi_families(PairedFastq *fq);
 static void print_family_sizes(PairedFastq *fq);
 static int collapse_families(PairedFastq *fq);
 static void merge_reads(ReadPair *bin_start, ReadPair * bin_end);
 static int remove_unconfirmed_reads(PairedFastq *fq, int min_family_size);
 static int write_fastqs(PairedFastq fq, char *read1, char *read2);
-static void print_family_sequences(PairedFastq *fq);
+void print_family_sequences(PairedFastq *fq);
 static int arg_to_int(char *arg);
+static int debug_dump_umis(PairedFastq *fq);
+
 
 
 static void brute_assign_families(ReadPair *bin_start, ReadPair *bin_end, int *current_family, int allowed) {
@@ -109,7 +112,7 @@ static void brute_assign_families(ReadPair *bin_start, ReadPair *bin_end, int *c
     
     
     
-// DO WE NEED TO WORRY ABOUT OVERSHOOTING ON SHORT READS?
+// DO WE NEED TO WORRY ABOUT OVERSHOOTING ON SHORT READS? .. Probanly not
 static int compare_by_short_sequence(const void *first, const void *second, const void *offset) {
     ReadPair *item1 = (ReadPair *)first;
     ReadPair *item2 = (ReadPair *)second;
@@ -281,8 +284,8 @@ static int do_they_overlap(ReadPair *readpair, int min_overlap, int allowed) {
     return 0;
     }
 
-    
-    
+
+
 static int arg_to_int(char *arg) {
     int retval;
     
@@ -304,18 +307,19 @@ int main (int argc, char **argv) {
     PairedFastq fq;
     clock_t time_start = clock();    
     char *read1 = NULL, *read2 = NULL;
-    int thruplex = 0, allowed = 3, min_family_size = 1, n = 0, ret = -1;
+    int thruplex = 0, allowed = 3, min_family_size = 1, dump_umis = 0, n = 0, ret = -1;
 
     // Variables needed by getopt_long
     int option_index = 0, c = 0;
     static struct option long_options[] = {{"thruplex", no_argument,       0, 't'},
+                                           {"debug_dump_umis", no_argument, 0, 'u'},
                                            {"allowed",  required_argument, 0, 'a'},
                                            {"min_family_size",  required_argument, 0, 'f'},
                                            {0, 0, 0, 0}};
 
     // Parse optional arguments
     while (c != -1) {
-        c = getopt_long (argc, argv, "ta:f:", long_options, &option_index);
+        c = getopt_long (argc, argv, "dta:f:", long_options, &option_index);
 
         switch (c) {
             case 'a':
@@ -328,6 +332,10 @@ int main (int argc, char **argv) {
                 
             case 't':
                 thruplex = 1;
+                break;
+                
+           case 'u':
+                dump_umis = 1;
                 break;
                 
             case '?':
@@ -370,7 +378,17 @@ int main (int argc, char **argv) {
     print_family_sizes(&fq);
     //print_family_sequences(&fq);
     
+    // Subgroup families based on umis
+    if (thruplex) {
+        assign_umi_families(&fq);
+
+        // Print family sizes
+        print_family_sizes(&fq);
+        }
+        
     // Collapse families into single consensus reads
+    if (dump_umis)
+        debug_dump_umis(&fq);
     n = collapse_families(&fq);
     fprintf(stderr, "Removed %i inexact duplicates (%i%% of %i)\n", n, n * 100 / (fq.total_reads + n), fq.total_reads + n);
     
@@ -640,7 +658,7 @@ static void debug_print_read(ReadPair *readpair) {
 
 
     
-static void debug_print_fastq(PairedFastq fq) {
+void debug_print_fastq(PairedFastq fq) {
     /* Print out every readpair, for use in debugging only.
      * WARNING - This will print out millions of lines if used with normal input.
      */ 
@@ -909,6 +927,46 @@ static int assign_families(PairedFastq *fq, int allowed) {
 
     
 
+static void assign_umi_families(PairedFastq *fq) {
+    ReadPair *readpair = NULL, *readpair2 = NULL, *readpair3 = NULL, *bin_start = NULL, *bin_end = NULL, *last_readpair = NULL;
+    int current_family = 0, joined_family = 0;
+    
+    qsort(fq->readpairs, fq->total_reads, sizeof(ReadPair), (void *)compare_by_family);
+    last_readpair = fq->readpairs + fq->total_reads - 1;
+    current_family = last_readpair->family;
+    
+    for (bin_start = fq->readpairs; bin_start <= last_readpair; bin_start = bin_end) {
+        bin_start->prevfamily = bin_start->family;
+        for (bin_end = bin_start + 1; bin_end <= last_readpair; bin_end++) {
+            if (bin_end->family != bin_start->family)
+                break;
+            bin_end->prevfamily = bin_end->family;
+            bin_end->family = 0;
+            }
+        
+        for (readpair = bin_start; readpair < bin_end; readpair++) {
+            if (readpair->family == 0)
+                readpair->family = ++current_family;
+            for(readpair2 = readpair + 1; readpair2 < bin_end; readpair2++) {
+                if (strcmp(readpair->read[R1].umi, readpair2->read[R1].umi) == 0 ||
+                    strcmp(readpair->read[R2].umi, readpair2->read[R2].umi) == 0) {
+                    if (readpair2->family == 0)
+                        readpair2->family = readpair->family;
+                    else if (readpair2->family != readpair->family) {
+                        joined_family = readpair2->family;
+                        for(readpair3 = bin_start; readpair3 < bin_end; readpair3++) {
+                            if (readpair3->family == joined_family)
+                                readpair3->family = readpair->family;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+
+
 static void print_family_sizes(PairedFastq *fq) {
     int counts[10] = { 0 }, members = 0, n = 0;
     ReadPair *bin_start = NULL, *bin_end = NULL;
@@ -941,7 +999,7 @@ static void print_family_sizes(PairedFastq *fq) {
 
 
     
-static void print_family_sequences(PairedFastq *fq) {
+void print_family_sequences(PairedFastq *fq) {
     ReadPair *bin_start = NULL, *bin_end = NULL, *readpair = NULL, *readpair2 = NULL;
     
     qsort(fq->readpairs, fq->total_reads, sizeof(ReadPair), (void *)compare_by_family);    
@@ -988,6 +1046,32 @@ static int collapse_families(PairedFastq *fq) {
         }
     fq->total_reads -= n;
     return n;
+    }
+
+
+
+static int debug_dump_umis(PairedFastq *fq) {
+    FILE *fp = NULL;
+    ReadPair *readpair = fq->readpairs;
+    int last_family;
+    
+    fp = fopen("umi_data.txt", "w");
+    if (fp == NULL) {
+        fprintf(stderr, "Unable to open umi_data file.\n");
+        return -1;
+        }
+        
+    qsort(fq->readpairs, fq->total_reads, sizeof(ReadPair), (void *)compare_by_family);
+    last_family = readpair->family;
+    for (;readpair < fq->readpairs + fq->total_reads; readpair++) {
+        if (readpair->family != last_family)
+            fprintf(fp, "\n");
+        last_family = readpair->family;
+        fprintf(fp, "%s,%s;", readpair->read[R1].umi, readpair->read[R2].umi);
+        }
+    fprintf(fp, "\n");
+    fclose(fp);
+    return 0;
     }
 
 
