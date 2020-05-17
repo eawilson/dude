@@ -1150,7 +1150,7 @@ static int remove_unconfirmed_reads(PairedFastq *fq, int min_family_size) {
     
     readpair2 = fq->readpairs;
     for (readpair = fq->readpairs; readpair < fq->readpairs + fq->total_reads; readpair++) {
-        if (readpair->copy_number >= min_family_size && (readpair->fragment_size > 0 || readpair->copy_number != 1)) {
+        if (readpair->copy_number >= min_family_size && (readpair->fragment_size > 0 || min_family_size != 1)) {
             if (readpair > readpair2)
                 *readpair2 = *readpair;
             readpair2++;
