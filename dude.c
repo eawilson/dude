@@ -108,11 +108,11 @@ int main (int argc, char **argv) {
                 break;                
                 
             case 'u':
-                if (strcmp(optarg, "thruplex")) {
+                if (strcmp(optarg, "thruplex") == 0) {
                     options.umi_len = 6;
                     options.umi_stem = 11;
                     }
-                else if (strcmp(optarg, "prism")) {
+                else if (strcmp(optarg, "prism") == 0) {
                     options.umi_len = 8;
                     }
                 else {
