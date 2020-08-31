@@ -319,7 +319,7 @@ static void size_and_remove_umis(PairedFastq fq) {
         reversecomplement(readpair->read[R2].seq, readpair->read[R2].len);
         reverse(readpair->read[R2].qual, readpair->read[R2].len);
         
-        fq.stats->sized_reads += do_they_overlap(readpair, 50, fq.options->allowed);
+        fq.stats->sized_reads += do_they_overlap(readpair, fq.options->min_overlap, fq.options->allowed);
         
         reversecomplement(readpair->read[R2].seq, readpair->read[R2].len);
         reverse(readpair->read[R2].qual, readpair->read[R2].len);            
@@ -882,7 +882,7 @@ static int collapse_families(PairedFastq fq) {
 static int compare_by_short_sequence(const void *first, const void *second, const void *offset) {
     ReadPair *item1 = (ReadPair *)first;
     ReadPair *item2 = (ReadPair *)second;
-    int index = 10 + (*((int *)offset) * 6);
+    int index = 20 + (*((int *)offset) * 6);
     int comp;
 
     comp = memcmp(item1->read[R1].seq + index, item2->read[R1].seq + index, 6);

@@ -52,6 +52,7 @@ typedef struct optionsstruct {
     bool interleaved;
     int max_consequtive_ns;
     int min_read_length;
+    int min_overlap;
     int umi_len;
     int umi_stem;
     bool pcr_free;

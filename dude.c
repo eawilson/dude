@@ -39,6 +39,7 @@ int main (int argc, char **argv) {
                        .interleaved = false,
                        .max_consequtive_ns = 2,
                        .min_read_length = 50,
+                       .min_overlap = 50,
                        .umi_len = 0,
                        .umi_stem = 0,
                        .pcr_free = false,
@@ -70,13 +71,14 @@ int main (int argc, char **argv) {
                                            {"max-consequtive-ns", required_argument, 0, 'm'},
                                            {"min-read-length", required_argument, 0, 'l'},
                                            {"umi", required_argument, 0, 'u'},
+                                           {"min-overlap", required_argument, 0, 'v'},
                                            
                                            // sam options
                                            {0, 0, 0, 0}};
 
     // Parse optional arguments
     while (c != -1) {
-        c = getopt_long (argc, argv, "o:s:e:npa:m:l:u:", long_options, &option_index);
+        c = getopt_long (argc, argv, "o:s:e:npa:m:l:u:v:", long_options, &option_index);
 
         switch (c) {
             case 'o':
@@ -123,6 +125,10 @@ int main (int argc, char **argv) {
             
             case 'n':
                 options.pcr_free = true;
+                break;
+                
+            case 'v':
+                options.min_overlap = arg_to_int(optarg);
                 break;
                 
             case '?':
