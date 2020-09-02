@@ -739,15 +739,17 @@ static int collapse_families(PairedFastq fq) {
 //             }
 //         
         if (bin_start->fragment_size + 1 > fq.stats->fragment_sizes->len) {
+            fprintf(stderr, "Extending fragment size: %li.\n", bin_start->fragment_size + 1 - fq.stats->fragment_sizes->len);
             if (extend_array(fq.stats->fragment_sizes, bin_start->fragment_size + 1 - fq.stats->fragment_sizes->len) == -1) {
-                return -1;
+                goto cleanup;
                 }
             }
         ++(((int *)fq.stats->fragment_sizes->address)[bin_start->fragment_size]);
 
         if (family_size + 1 > fq.stats->family_sizes->len) {
+            fprintf(stderr, "Extending family size: %li.\n", family_size + 1 - fq.stats->family_sizes->len);
             if (extend_array(fq.stats->family_sizes, family_size + 1 - fq.stats->family_sizes->len) == -1) {
-                return -1;
+                goto cleanup;
                 }
             }
         ++(((int *)fq.stats->family_sizes->address)[family_size]);
@@ -778,13 +780,13 @@ static int collapse_families(PairedFastq fq) {
                 }
 
                 if (max_len > allocated_len) {
-                if ((consensus_qual = realloc(consensus_seq, (max_len + 1) * 2)) == NULL) {
-                    goto cleanup;
+                    if ((consensus_qual = realloc(consensus_seq, (max_len + 1) * 2)) == NULL) {
+                        goto cleanup;
+                        }
+                    allocated_len = max_len;
+                    consensus_seq = consensus_qual;
+                    consensus_qual += max_len + 1;
                     }
-                allocated_len = max_len;
-                consensus_seq = consensus_qual;
-                consensus_qual += max_len + 1;
-                }
             
             // Generate consensus sequence and quality.
             needed = (6 * family_size) / 10;
@@ -842,7 +844,7 @@ static int collapse_families(PairedFastq fq) {
     cleanup:
     if (fp != NULL && fclose(fp) != 0) {
         fprintf(stderr, "Error: Unable to close %s.\n", fq.options->output_filename);
-        return -1;
+        ret = -1;
         }
     free(consensus_seq);
     return ret;
