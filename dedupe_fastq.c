@@ -685,8 +685,8 @@ static void assign_umi_families(PairedFastq fq) {
             if (readpair->family == 0)
                 readpair->family = ++current_family;
             for(readpair2 = readpair + 1; readpair2 < bin_end; readpair2++) {
-                if (memcmp(readpair->read[R1].umi, readpair2->read[R1].umi, fq.options->umi_len) == 0 ||
-                    memcmp(readpair->read[R2].umi, readpair2->read[R2].umi, fq.options->umi_len) == 0) {
+                if ((memcmp(readpair->read[R1].umi, readpair2->read[R1].umi, fq.options->umi_len) == 0) +
+                    (memcmp(readpair->read[R2].umi, readpair2->read[R2].umi, fq.options->umi_len) == 0) >= fq.options->umi_exact) {
                     if (readpair2->family == 0)
                         readpair2->family = readpair->family;
                     else if (readpair2->family != readpair->family) {

@@ -55,6 +55,7 @@ typedef struct optionsstruct {
     int min_overlap;
     int umi_len;
     int umi_stem;
+    int umi_exact;
     bool pcr_free;
     char *output_filename;
     char *stats_filename;

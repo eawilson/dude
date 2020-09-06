@@ -42,6 +42,7 @@ int main (int argc, char **argv) {
                        .min_overlap = 50,
                        .umi_len = 0,
                        .umi_stem = 0,
+                       .umi_exact = 1,
                        .pcr_free = false,
                        .output_filename = NULL,
                        .stats_filename = "stats.json"};
@@ -113,9 +114,17 @@ int main (int argc, char **argv) {
                 if (strcmp(optarg, "thruplex") == 0) {
                     options.umi_len = 6;
                     options.umi_stem = 11;
+                    options.umi_exact = 1;
+                    }
+                else if (strcmp(optarg, "thruplex_hv") == 0) {
+                    options.umi_len = 7;
+                    options.umi_stem = 1;
+                    options.umi_exact = 2;
                     }
                 else if (strcmp(optarg, "prism") == 0) {
                     options.umi_len = 8;
+                    options.umi_stem = 0;
+                    options.umi_exact = 2;
                     }
                 else {
                     fprintf(stderr, "Error: Unsupported umi: %s\n.", optarg);
